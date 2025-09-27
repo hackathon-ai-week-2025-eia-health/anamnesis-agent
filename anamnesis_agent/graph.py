@@ -75,22 +75,22 @@ def build_graph(classifier_target_lang: str = "es"):
 
     def _planner_route(state: AgentState) -> str:
         internal = state.get("data", {}).get("_internal", {})
-        
+
         # Emergency loop prevention - check total graph steps
         graph_steps = internal.get("graph_steps", 0)
         if graph_steps > 20:  # Prevent infinite recursion
             return "classify"  # Force exit to classification
-            
+
         # Check planner-specific loop count
         planner_loops = internal.get("planner_loop_count", 0)
         if planner_loops > 6:  # Aggressive threshold
             return "classify"  # Force exit
-            
+
         # Check conversation turns
         raw_dialog = state.get("data", {}).get("raw_dialog", [])
         if len(raw_dialog) > 25:  # Too many messages
             return "classify"  # Force exit
-        
+
         action = internal.get("planner_action")
         if action == "classify":
             return "classify"
@@ -111,30 +111,30 @@ def build_graph(classifier_target_lang: str = "es"):
     def _sufficiency_route(state: AgentState) -> str:
         data = state.get("data", {})
         internal = data.get("_internal", {})
-        
+
         # Emergency loop prevention - multiple safeguards
         graph_steps = internal.get("graph_steps", 0)
         planner_loops = internal.get("planner_loop_count", 0)
         raw_dialog = data.get("raw_dialog", [])
-        
+
         # Force ready if any emergency condition is met
         emergency_exit = (
-            graph_steps > 18 or
-            planner_loops > 5 or
-            len(raw_dialog) > 20 or
-            internal.get("conversation_stuck_exit", False)
+            graph_steps > 18
+            or planner_loops > 5
+            or len(raw_dialog) > 20
+            or internal.get("conversation_stuck_exit", False)
         )
-        
+
         if emergency_exit:
             # Log the emergency exit for debugging
             internal["emergency_exit_reason"] = {
                 "graph_steps": graph_steps,
-                "planner_loops": planner_loops, 
+                "planner_loops": planner_loops,
                 "dialog_length": len(raw_dialog),
-                "stuck_exit": internal.get("conversation_stuck_exit", False)
+                "stuck_exit": internal.get("conversation_stuck_exit", False),
             }
             return "ready"  # Force classification
-        
+
         has_suff = internal.get("has_sufficiency")
         return "ready" if has_suff else "need"
 
@@ -156,10 +156,7 @@ def build_graph(classifier_target_lang: str = "es"):
     graph.add_edge("await_user", END)
 
     return graph.compile(
-        checkpointer=None, 
-        interrupt_before=None, 
-        interrupt_after=None, 
-        debug=False
+        checkpointer=None, interrupt_before=None, interrupt_after=None, debug=False
     )
 
 

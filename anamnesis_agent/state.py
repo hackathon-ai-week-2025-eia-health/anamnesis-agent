@@ -329,9 +329,18 @@ def user_answered_question(
 
     # Enhanced evasive response detection
     evasive_responses = [
-        "no sé", "no lo sé", "no estoy seguro", "no recuerdo", "no me acuerdo",
-        "no sabría decir", "no tengo idea", "no lo recuerdo", "no sabría",
-        "no estoy segura", "no me doy cuenta", "no puedo decir"
+        "no sé",
+        "no lo sé",
+        "no estoy seguro",
+        "no recuerdo",
+        "no me acuerdo",
+        "no sabría decir",
+        "no tengo idea",
+        "no lo recuerdo",
+        "no sabría",
+        "no estoy segura",
+        "no me doy cuenta",
+        "no puedo decir",
     ]
 
     if any(phrase in response_lower for phrase in evasive_responses):
@@ -339,44 +348,48 @@ def user_answered_question(
 
     # Check for field-specific response patterns
     field_responses = _get_field_response_patterns(expected_field)
-    
+
     # Look for positive indicators
     has_field_indicators = any(
-        indicator in response_lower for indicator in field_responses.get("indicators", [])
+        indicator in response_lower
+        for indicator in field_responses.get("indicators", [])
     )
-    
+
     # Look for value patterns
     has_value_patterns = any(
-        pattern in response_lower for pattern in field_responses.get("value_patterns", [])
+        pattern in response_lower
+        for pattern in field_responses.get("value_patterns", [])
     )
-    
+
     # Check response length and complexity
     word_count = len(response_lower.split())
-    
+
     # Simple responses that might be valid
     if word_count <= 3:
         simple_valid = field_responses.get("simple_valid", [])
         if any(phrase in response_lower for phrase in simple_valid):
             return True
         # Single word/number responses for specific fields
-        if expected_field == "sintoma_intensidad" and any(char.isdigit() for char in response_lower):
+        if expected_field == "sintoma_intensidad" and any(
+            char.isdigit() for char in response_lower
+        ):
             return True
         return False
-    
+
     # Complex responses - check for relevance
     if has_field_indicators or has_value_patterns:
         return True
-    
+
     # Check if response seems to contain useful medical information
     if _contains_medical_info(response_lower, expected_field):
         return True
-    
+
     # For longer responses, be more permissive if they seem genuine
     if word_count >= 5:
         # Check if it's a genuine attempt to communicate
         if not _seems_frustrated_or_confused(response_lower):
             return True
-    
+
     return False
 
 
@@ -384,83 +397,230 @@ def _get_field_response_patterns(field: str) -> Dict[str, List[str]]:
     """Get response patterns for specific fields"""
     patterns = {
         "motivo": {
-            "indicators": ["dolor", "molestia", "problema", "síntoma", "siento", "tengo"],
+            "indicators": [
+                "dolor",
+                "molestia",
+                "problema",
+                "síntoma",
+                "siento",
+                "tengo",
+            ],
             "value_patterns": ["me duele", "siento", "tengo", "problema con"],
-            "simple_valid": ["dolor", "tos", "fiebre", "mareo", "náuseas"]
+            "simple_valid": ["dolor", "tos", "fiebre", "mareo", "náuseas"],
         },
         "sintoma_nombre": {
-            "indicators": ["dolor", "duele", "molestia", "siento", "tengo", "tos", "fiebre"],
+            "indicators": [
+                "dolor",
+                "duele",
+                "molestia",
+                "siento",
+                "tengo",
+                "tos",
+                "fiebre",
+            ],
             "value_patterns": ["me duele", "dolor en", "dolor de", "tengo", "siento"],
-            "simple_valid": ["dolor", "tos", "fiebre", "mareo", "náuseas", "cansancio"]
+            "simple_valid": ["dolor", "tos", "fiebre", "mareo", "náuseas", "cansancio"],
         },
         "sintoma_inicio": {
-            "indicators": ["desde", "empezó", "comenzó", "ayer", "hoy", "hace", "cuando"],
+            "indicators": [
+                "desde",
+                "empezó",
+                "comenzó",
+                "ayer",
+                "hoy",
+                "hace",
+                "cuando",
+            ],
             "value_patterns": ["desde", "hace", "empezó", "comenzó", "ayer", "hoy"],
-            "simple_valid": ["ayer", "hoy", "anoche", "mañana"]
+            "simple_valid": ["ayer", "hoy", "anoche", "mañana"],
         },
         "sintoma_duracion_horas": {
-            "indicators": ["horas", "días", "minutos", "tiempo", "desde", "hace", "llevo"],
-            "value_patterns": ["horas", "días", "minutos", "hace", "desde", "llevo", "tiempo"],
-            "simple_valid": ["ayer", "hoy", "horas", "días"]
+            "indicators": [
+                "horas",
+                "días",
+                "minutos",
+                "tiempo",
+                "desde",
+                "hace",
+                "llevo",
+            ],
+            "value_patterns": [
+                "horas",
+                "días",
+                "minutos",
+                "hace",
+                "desde",
+                "llevo",
+                "tiempo",
+            ],
+            "simple_valid": ["ayer", "hoy", "horas", "días"],
         },
         "sintoma_curso": {
-            "indicators": ["constante", "continuo", "intermitente", "va y viene", "siempre", "a ratos"],
-            "value_patterns": ["constante", "continuo", "intermitente", "va y viene", "todo el tiempo"],
-            "simple_valid": ["constante", "continuo", "intermitente", "siempre"]
+            "indicators": [
+                "constante",
+                "continuo",
+                "intermitente",
+                "va y viene",
+                "siempre",
+                "a ratos",
+            ],
+            "value_patterns": [
+                "constante",
+                "continuo",
+                "intermitente",
+                "va y viene",
+                "todo el tiempo",
+            ],
+            "simple_valid": ["constante", "continuo", "intermitente", "siempre"],
         },
         "sintoma_intensidad": {
-            "indicators": ["0", "1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "fuerte", "leve"],
-            "value_patterns": ["/10", "de 10", "del 0", "intensidad", "fuerte", "leve", "moderado"],
-            "simple_valid": ["fuerte", "leve", "mucho", "poco", "moderado"]
+            "indicators": [
+                "0",
+                "1",
+                "2",
+                "3",
+                "4",
+                "5",
+                "6",
+                "7",
+                "8",
+                "9",
+                "10",
+                "fuerte",
+                "leve",
+            ],
+            "value_patterns": [
+                "/10",
+                "de 10",
+                "del 0",
+                "intensidad",
+                "fuerte",
+                "leve",
+                "moderado",
+            ],
+            "simple_valid": ["fuerte", "leve", "mucho", "poco", "moderado"],
         },
         "antecedentes_personales": {
-            "indicators": ["diabetes", "hipertensión", "medicamento", "enfermedad", "problema", "tomo"],
-            "value_patterns": ["tengo", "tomo", "medicamento", "pastillas", "diabetes", "presión"],
-            "simple_valid": ["nada", "ninguno", "no", "diabetes", "hipertensión"]
+            "indicators": [
+                "diabetes",
+                "hipertensión",
+                "medicamento",
+                "enfermedad",
+                "problema",
+                "tomo",
+            ],
+            "value_patterns": [
+                "tengo",
+                "tomo",
+                "medicamento",
+                "pastillas",
+                "diabetes",
+                "presión",
+            ],
+            "simple_valid": ["nada", "ninguno", "no", "diabetes", "hipertensión"],
         },
         "antecedentes_familiares": {
-            "indicators": ["familia", "padre", "madre", "hermano", "familiar", "papá", "mamá"],
-            "value_patterns": ["familia", "padre", "madre", "hermano", "familiar", "abuelo"],
-            "simple_valid": ["nada", "nadie", "no", "ninguno"]
+            "indicators": [
+                "familia",
+                "padre",
+                "madre",
+                "hermano",
+                "familiar",
+                "papá",
+                "mamá",
+            ],
+            "value_patterns": [
+                "familia",
+                "padre",
+                "madre",
+                "hermano",
+                "familiar",
+                "abuelo",
+            ],
+            "simple_valid": ["nada", "nadie", "no", "ninguno"],
         },
         "habitos_riesgo": {
-            "indicators": ["fumo", "fumar", "alcohol", "beber", "trabajo", "exposición"],
-            "value_patterns": ["fumo", "bebo", "trabajo", "alcohol", "cigarrillos", "exposición"],
-            "simple_valid": ["nada", "no", "ninguno", "fumo", "bebo"]
+            "indicators": [
+                "fumo",
+                "fumar",
+                "alcohol",
+                "beber",
+                "trabajo",
+                "exposición",
+            ],
+            "value_patterns": [
+                "fumo",
+                "bebo",
+                "trabajo",
+                "alcohol",
+                "cigarrillos",
+                "exposición",
+            ],
+            "simple_valid": ["nada", "no", "ninguno", "fumo", "bebo"],
         },
         "sintomas_asociados": {
             "indicators": ["también", "además", "acompañado", "junto", "otro", "más"],
-            "value_patterns": ["también", "además", "acompañado", "junto con", "otro síntoma"],
-            "simple_valid": ["nada", "no", "ninguno", "solo", "únicamente"]
-        }
+            "value_patterns": [
+                "también",
+                "además",
+                "acompañado",
+                "junto con",
+                "otro síntoma",
+            ],
+            "simple_valid": ["nada", "no", "ninguno", "solo", "únicamente"],
+        },
     }
-    
-    return patterns.get(field, {
-        "indicators": [],
-        "value_patterns": [],
-        "simple_valid": []
-    })
+
+    return patterns.get(
+        field, {"indicators": [], "value_patterns": [], "simple_valid": []}
+    )
 
 
 def _contains_medical_info(response: str, expected_field: str) -> bool:
     """Check if response contains medical information relevant to any field"""
     medical_terms = [
-        "dolor", "molestia", "síntoma", "enfermedad", "medicamento", "pastilla",
-        "diabetes", "hipertensión", "presión", "corazón", "cabeza", "estómago",
-        "pecho", "espalda", "pierna", "brazo", "tos", "fiebre", "mareo",
-        "náuseas", "vómito", "diarrea", "estreñimiento", "cansancio"
+        "dolor",
+        "molestia",
+        "síntoma",
+        "enfermedad",
+        "medicamento",
+        "pastilla",
+        "diabetes",
+        "hipertensión",
+        "presión",
+        "corazón",
+        "cabeza",
+        "estómago",
+        "pecho",
+        "espalda",
+        "pierna",
+        "brazo",
+        "tos",
+        "fiebre",
+        "mareo",
+        "náuseas",
+        "vómito",
+        "diarrea",
+        "estreñimiento",
+        "cansancio",
     ]
-    
+
     return any(term in response for term in medical_terms)
 
 
 def _seems_frustrated_or_confused(response: str) -> bool:
     """Detect if response shows frustration or confusion"""
     frustration_patterns = [
-        "ya te dije", "ya te conté", "no entiendo", "qué quieres",
-        "no sé qué", "qué más", "esto es", "por qué"
+        "ya te dije",
+        "ya te conté",
+        "no entiendo",
+        "qué quieres",
+        "no sé qué",
+        "qué más",
+        "esto es",
+        "por qué",
     ]
-    
+
     return any(pattern in response for pattern in frustration_patterns)
 
 
@@ -601,41 +761,43 @@ def has_sufficient_data(anamnesis: Dict[str, Any]) -> bool:
         return False
 
     sympt = anamnesis["sintoma_principal"]
-    
+
     # More permissive approach - if we have complaint + ANY additional info, that's often enough
     additional_info = [
         sympt.get("inicio"),
-        sympt.get("duracion_horas"), 
+        sympt.get("duracion_horas"),
         sympt.get("curso"),
         sympt.get("intensidad_0_10"),
         anamnesis.get("antecedentes_personales"),
-        anamnesis.get("sintomas_asociados")
+        anamnesis.get("sintomas_asociados"),
     ]
-    
+
     # Count non-empty additional info
     info_count = sum(1 for info in additional_info if info)
-    
+
     # Very permissive threshold - just 2 pieces of additional info
     if info_count >= 2:
         return True
-    
+
     # Even more permissive for basic scenarios
     # If we have temporal info (inicio OR duracion) + any characterization, that's enough
     has_temporal = bool(sympt.get("inicio") or sympt.get("duracion_horas"))
     has_characterization = bool(sympt.get("intensidad_0_10") or sympt.get("curso"))
-    
+
     if has_temporal and has_characterization:
         return True
-    
+
     # If we have temporal + medical context, that's sufficient too
-    has_medical_context = bool(anamnesis.get("antecedentes_personales") or anamnesis.get("sintomas_asociados"))
+    has_medical_context = bool(
+        anamnesis.get("antecedentes_personales") or anamnesis.get("sintomas_asociados")
+    )
     if has_temporal and has_medical_context:
         return True
-    
+
     # Last resort - if we have intensity + any other info
     if sympt.get("intensidad_0_10") and info_count >= 1:
         return True
-        
+
     return False
 
 
@@ -686,29 +848,27 @@ def determine_missing_fields(parsed: Dict[str, Any]) -> List[str]:
 
     # Medical context - adaptive approach
     has_any_history = bool(
-        anamnesis.get("antecedentes_personales") or 
-        anamnesis.get("antecedentes_familiares")
+        anamnesis.get("antecedentes_personales")
+        or anamnesis.get("antecedentes_familiares")
     )
-    
+
     if not has_any_history:
         # Start with personal history as it's more relevant
         missing.append("antecedentes_personales")
-    
+
     if len(missing) >= 2:
         return missing
 
     # Additional symptoms - only if we have good basic info
     if not anamnesis.get("sintomas_asociados") and len(missing) < 2:
         # Only ask if we have solid foundation
-        temporal_score = sum([
-            bool(sympt.get("inicio")),
-            bool(sympt.get("duracion_horas"))
-        ])
-        characterization_score = sum([
-            bool(sympt.get("intensidad_0_10")),
-            bool(sympt.get("curso"))
-        ])
-        
+        temporal_score = sum(
+            [bool(sympt.get("inicio")), bool(sympt.get("duracion_horas"))]
+        )
+        characterization_score = sum(
+            [bool(sympt.get("intensidad_0_10")), bool(sympt.get("curso"))]
+        )
+
         if temporal_score >= 1 and characterization_score >= 1:
             missing.append("sintomas_asociados")
 
@@ -737,17 +897,21 @@ def _calculate_info_completeness(anamnesis: Dict[str, Any]) -> float:
     """Calculate how complete the anamnesis information is (0.0 to 1.0)"""
     total_possible = 10
     current_score = 0
-    
+
     # Basic info (4 points possible)
     if anamnesis.get("motivo"):
         current_score += 1
     if anamnesis["sintoma_principal"].get("nombre"):
         current_score += 1
-    if anamnesis["sintoma_principal"].get("inicio") or anamnesis["sintoma_principal"].get("duracion_horas"):
+    if anamnesis["sintoma_principal"].get("inicio") or anamnesis[
+        "sintoma_principal"
+    ].get("duracion_horas"):
         current_score += 1
-    if anamnesis["sintoma_principal"].get("intensidad_0_10") or anamnesis["sintoma_principal"].get("curso"):
+    if anamnesis["sintoma_principal"].get("intensidad_0_10") or anamnesis[
+        "sintoma_principal"
+    ].get("curso"):
         current_score += 1
-    
+
     # Additional info (6 points possible)
     if anamnesis.get("antecedentes_personales"):
         current_score += 1
@@ -757,13 +921,17 @@ def _calculate_info_completeness(anamnesis: Dict[str, Any]) -> float:
         current_score += 1
     if anamnesis.get("habitos_riesgo"):
         current_score += 1
-    
+
     # Detailed symptom info (2 points)
-    if anamnesis["sintoma_principal"].get("intensidad_0_10") and anamnesis["sintoma_principal"].get("curso"):
+    if anamnesis["sintoma_principal"].get("intensidad_0_10") and anamnesis[
+        "sintoma_principal"
+    ].get("curso"):
         current_score += 1
-    if anamnesis["sintoma_principal"].get("inicio") and anamnesis["sintoma_principal"].get("duracion_horas"):
+    if anamnesis["sintoma_principal"].get("inicio") and anamnesis[
+        "sintoma_principal"
+    ].get("duracion_horas"):
         current_score += 1
-    
+
     return min(current_score / total_possible, 1.0)
 
 

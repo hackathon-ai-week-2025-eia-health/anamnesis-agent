@@ -150,27 +150,29 @@ def red_flags_node(state: AgentState) -> AgentState:
 def planner_node(state: AgentState) -> AgentState:
     data = clone_data(state.get("data", {}))
     internal = data.setdefault("_internal", {})
-    
+
     # Track total graph steps for emergency exit
     graph_steps = internal.get("graph_steps", 0) + 1
     internal["graph_steps"] = graph_steps
-    
+
     # EMERGENCY EXIT CONDITIONS - multiple safeguards
     loop_count = internal.get("planner_loop_count", 0)
     conversation_turns = len(data.get("raw_dialog", [])) // 2
-    
+
     # Immediate exit conditions (very aggressive)
     if (
-        graph_steps > 20 or  # Too many total steps
-        loop_count > 5 or    # Too many planner loops  
-        conversation_turns > 12  # Too long conversation
+        graph_steps > 20  # Too many total steps
+        or loop_count > 5  # Too many planner loops
+        or conversation_turns > 12  # Too long conversation
     ):
         internal["planner_action"] = "classify"
         internal["planner_target"] = None
         internal["emergency_exit"] = True
-        internal["emergency_reason"] = f"steps:{graph_steps}, loops:{loop_count}, turns:{conversation_turns}"
+        internal["emergency_reason"] = (
+            f"steps:{graph_steps}, loops:{loop_count}, turns:{conversation_turns}"
+        )
         return {"data": data}
-    
+
     # Continue with existing logic
     parsed = ensure_parsed(data)
     missing = determine_missing_fields(parsed)
@@ -210,7 +212,9 @@ def planner_node(state: AgentState) -> AgentState:
     # Smart field selection with context awareness
     recently_asked = internal.get("recently_asked_fields", [])
     failed_fields = internal.get("failed_fields", [])  # Fields user couldn't answer
-    available_missing = [f for f in missing if f not in recently_asked and f not in failed_fields]
+    available_missing = [
+        f for f in missing if f not in recently_asked and f not in failed_fields
+    ]
 
     if not available_missing:
         # If we've exhausted options, use adaptive strategy
@@ -236,7 +240,9 @@ def planner_node(state: AgentState) -> AgentState:
                 return {"data": data}
 
     # Intelligent field selection with conversation context
-    target = _select_next_field_enhanced(available_missing, parsed, internal, dict(data))
+    target = _select_next_field_enhanced(
+        available_missing, parsed, internal, dict(data)
+    )
     internal["planner_action"] = "ask"
     internal["planner_target"] = target
     internal["awaiting_field"] = target
@@ -256,13 +262,16 @@ def planner_node(state: AgentState) -> AgentState:
 
 
 def _select_next_field_enhanced(
-    missing: List[str], parsed: Dict[str, Any], internal: Dict[str, Any], data: Dict[str, Any]
+    missing: List[str],
+    parsed: Dict[str, Any],
+    internal: Dict[str, Any],
+    data: Dict[str, Any],
 ) -> str:
     """Enhanced intelligent field selection with conversation context awareness"""
     anamnesis = parsed.get("anamnesis", {})
     conversation_turns = len(data.get("raw_dialog", [])) // 2
     failed_attempts = internal.get("failed_field_attempts", {})
-    
+
     # Priority 1: Absolute critical fields - always ask first
     critical_fields = ["motivo", "sintoma_nombre"]
     for field in critical_fields:
@@ -273,15 +282,17 @@ def _select_next_field_enhanced(
     # If we have basic info, focus on temporal aspects smartly
     if anamnesis.get("motivo") and anamnesis.get("sintoma_principal", {}).get("nombre"):
         temporal_fields = ["sintoma_duracion_horas", "sintoma_inicio"]
-        
+
         # Choose based on what's easier to answer
         for field in temporal_fields:
             if field in missing and failed_attempts.get(field, 0) < 2:
                 # Prefer duration over inicio if user seems to struggle with time references
                 if field == "sintoma_duracion_horas" and "sintoma_inicio" in missing:
                     recent_responses = _get_recent_user_responses(data, 3)
-                    if any("no sé" in resp.lower() or "no recuerdo" in resp.lower() 
-                          for resp in recent_responses):
+                    if any(
+                        "no sé" in resp.lower() or "no recuerdo" in resp.lower()
+                        for resp in recent_responses
+                    ):
                         # User struggles with memory, prefer duration
                         return field
                 return field
@@ -300,8 +311,12 @@ def _select_next_field_enhanced(
     if conversation_turns < 6:  # Early in conversation
         priority_context = ["antecedentes_personales", "sintomas_asociados"]
     else:  # Later in conversation
-        priority_context = ["sintomas_asociados", "antecedentes_personales", "habitos_riesgo"]
-    
+        priority_context = [
+            "sintomas_asociados",
+            "antecedentes_personales",
+            "habitos_riesgo",
+        ]
+
     for field in priority_context:
         if field in missing and failed_attempts.get(field, 0) < 2:
             return field
@@ -321,39 +336,49 @@ def _detect_conversation_stuck(data: Dict[str, Any], internal: Dict[str, Any]) -
     raw_dialog = data.get("raw_dialog", [])
     if len(raw_dialog) < 6:  # Too early to detect patterns
         return False
-    
+
     # Check for repetitive assistant questions
     recent_assistant_msgs = [
-        turn.get("content", "").lower() 
-        for turn in raw_dialog[-6:] 
+        turn.get("content", "").lower()
+        for turn in raw_dialog[-6:]
         if turn.get("role") == "assistant"
     ]
-    
+
     if len(recent_assistant_msgs) >= 3:
         # Check for similar questions
         for i in range(len(recent_assistant_msgs) - 1):
             for j in range(i + 1, len(recent_assistant_msgs)):
-                if _questions_too_similar(recent_assistant_msgs[i], recent_assistant_msgs[j]):
+                if _questions_too_similar(
+                    recent_assistant_msgs[i], recent_assistant_msgs[j]
+                ):
                     return True
-    
+
     # Check for user frustration patterns
     recent_user_msgs = [
-        turn.get("content", "").lower() 
-        for turn in raw_dialog[-4:] 
+        turn.get("content", "").lower()
+        for turn in raw_dialog[-4:]
         if turn.get("role") == "user"
     ]
-    
+
     frustration_indicators = [
-        "ya te dije", "ya te conté", "no sé qué más", "no entiendo", 
-        "no sé", "no recuerdo", "no lo sé", "basta", "termina"
+        "ya te dije",
+        "ya te conté",
+        "no sé qué más",
+        "no entiendo",
+        "no sé",
+        "no recuerdo",
+        "no lo sé",
+        "basta",
+        "termina",
     ]
-    
+
     frustration_count = sum(
-        1 for msg in recent_user_msgs 
-        for indicator in frustration_indicators 
+        1
+        for msg in recent_user_msgs
+        for indicator in frustration_indicators
         if indicator in msg
     )
-    
+
     return frustration_count >= 2
 
 
@@ -362,13 +387,13 @@ def _questions_too_similar(q1: str, q2: str) -> bool:
     # Simple similarity check based on key terms
     key_terms_q1 = set(word for word in q1.split() if len(word) > 3)
     key_terms_q2 = set(word for word in q2.split() if len(word) > 3)
-    
+
     if not key_terms_q1 or not key_terms_q2:
         return False
-    
+
     overlap = len(key_terms_q1.intersection(key_terms_q2))
     similarity = overlap / min(len(key_terms_q1), len(key_terms_q2))
-    
+
     return similarity > 0.6
 
 
@@ -377,11 +402,11 @@ def _check_user_responsiveness(data: Dict[str, Any], awaiting_field: str) -> boo
     raw_dialog = data.get("raw_dialog", [])
     if len(raw_dialog) < 2:
         return True  # Give benefit of doubt early in conversation
-    
+
     # Look for the last assistant question about this field
     field_config = FIELD_CONFIG.get(awaiting_field, {})
     field_keywords = field_config.get("keywords", [])
-    
+
     # Count recent attempts to ask about this field
     recent_attempts = 0
     for i in range(len(raw_dialog) - 1, -1, -1):
@@ -395,30 +420,37 @@ def _check_user_responsiveness(data: Dict[str, Any], awaiting_field: str) -> boo
         elif recent_attempts > 0:
             # Found user response, check if it was relevant
             user_content = turn.get("content", "").lower()
-            if any(indicator in user_content for indicator in ["no sé", "no recuerdo", "no lo sé"]):
+            if any(
+                indicator in user_content
+                for indicator in ["no sé", "no recuerdo", "no lo sé"]
+            ):
                 return False  # User can't/won't answer
             break
-    
+
     return True
 
 
 def _can_proceed_with_minimal_info(parsed: Dict[str, Any]) -> bool:
     """Enhanced check for minimal viable information"""
     anamnesis = parsed.get("anamnesis", {})
-    
+
     # Must have basic complaint
-    if not anamnesis.get("motivo") and not anamnesis.get("sintoma_principal", {}).get("nombre"):
+    if not anamnesis.get("motivo") and not anamnesis.get("sintoma_principal", {}).get(
+        "nombre"
+    ):
         return False
-    
+
     # Must have SOME temporal or descriptive information
     sympt = anamnesis.get("sintoma_principal", {})
     has_temporal = bool(sympt.get("inicio") or sympt.get("duracion_horas"))
     has_descriptive = bool(sympt.get("intensidad_0_10") or sympt.get("curso"))
-    has_context = bool(anamnesis.get("antecedentes_personales") or anamnesis.get("sintomas_asociados"))
-    
+    has_context = bool(
+        anamnesis.get("antecedentes_personales") or anamnesis.get("sintomas_asociados")
+    )
+
     # Need at least 2 out of 3 categories
     info_categories = sum([has_temporal, has_descriptive, has_context])
-    
+
     return info_categories >= 2
 
 
@@ -426,9 +458,7 @@ def _get_recent_user_responses(data: Dict[str, Any], count: int = 3) -> List[str
     """Get recent user responses for analysis"""
     raw_dialog = data.get("raw_dialog", [])
     user_responses = [
-        turn.get("content", "") 
-        for turn in raw_dialog 
-        if turn.get("role") == "user"
+        turn.get("content", "") for turn in raw_dialog if turn.get("role") == "user"
     ]
     return user_responses[-count:] if user_responses else []
 
@@ -436,17 +466,17 @@ def _get_recent_user_responses(data: Dict[str, Any], count: int = 3) -> List[str
 def ask_user_node(state: AgentState) -> AgentState:
     data = clone_data(state.get("data", {}))
     internal = data.setdefault("_internal", {})
-    
+
     # Track graph steps
     graph_steps = internal.get("graph_steps", 0) + 1
     internal["graph_steps"] = graph_steps
-    
+
     # Emergency exit if too many steps
     if graph_steps > 21:
         # Don't ask more questions, force classification
         internal["emergency_exit"] = True
         return {"data": data}
-    
+
     if internal.get("planner_action") != "ask":
         return {"data": data}
 
@@ -460,12 +490,12 @@ def ask_user_node(state: AgentState) -> AgentState:
 
     # Enhanced question generation with context awareness
     internal["last_asked_field"] = target
-    
+
     # Check if this is a retry (field has been asked before)
     failed_attempts = internal.get("failed_field_attempts", {})
     is_retry = failed_attempts.get(target, 0) > 0
     conversation_turns = len(data.get("raw_dialog", [])) // 2
-    
+
     question = None
 
     # Try intelligent question generation with LLM
@@ -481,7 +511,9 @@ def ask_user_node(state: AgentState) -> AgentState:
 
     # Enhanced fallback questions with context awareness
     if not question:
-        question = _generate_contextual_question(target, config, dict(data), is_retry, conversation_turns)
+        question = _generate_contextual_question(
+            target, config, dict(data), is_retry, conversation_turns
+        )
 
     # Add encouraging context for retries
     if is_retry and question:
@@ -497,88 +529,113 @@ def ask_user_node(state: AgentState) -> AgentState:
 
 
 def _generate_contextual_question(
-    target: str, config: Dict[str, Any], data: Dict[str, Any], is_retry: bool, conversation_turns: int
+    target: str,
+    config: Dict[str, Any],
+    data: Dict[str, Any],
+    is_retry: bool,
+    conversation_turns: int,
 ) -> str:
     """Generate contextual questions based on conversation state and field type"""
-    
+
     anamnesis = data.get("anamnesis", {})
-    
+
     # Get what we already know for context
     known_symptom = anamnesis.get("sintoma_principal", {}).get("nombre")
     known_motivo = anamnesis.get("motivo")
-    
+
     # Context-aware question templates
     contextual_questions = {
         "motivo": [
-            "¿Qué te trae por aquí hoy?" if not is_retry else "¿Podrías contarme brevemente cuál es tu principal preocupación?",
-            "¿Cuál es el motivo principal de tu consulta?" if conversation_turns > 3 else "¿En qué puedo ayudarte hoy?"
+            "¿Qué te trae por aquí hoy?"
+            if not is_retry
+            else "¿Podrías contarme brevemente cuál es tu principal preocupación?",
+            "¿Cuál es el motivo principal de tu consulta?"
+            if conversation_turns > 3
+            else "¿En qué puedo ayudarte hoy?",
         ],
         "sintoma_nombre": [
-            f"Veo que mencionaste '{known_motivo}', ¿podrías describirme específicamente qué síntoma tienes?" if known_motivo 
+            f"Veo que mencionaste '{known_motivo}', ¿podrías describirme específicamente qué síntoma tienes?"
+            if known_motivo
             else "¿Podrías describirme el síntoma principal que estás experimentando?",
-            "¿Qué es exactamente lo que sientes?" if is_retry else "¿Cuál es el síntoma que más te preocupa?"
+            "¿Qué es exactamente lo que sientes?"
+            if is_retry
+            else "¿Cuál es el síntoma que más te preocupa?",
         ],
         "sintoma_inicio": [
-            f"¿Cuándo comenzó {known_symptom or 'este síntoma'}?" if known_symptom 
+            f"¿Cuándo comenzó {known_symptom or 'este síntoma'}?"
+            if known_symptom
             else "¿Cuándo empezaste a notar este problema?",
-            "¿Desde cuándo tienes esta molestia?" if is_retry 
-            else "¿Recuerdas cuándo empezó?"
+            "¿Desde cuándo tienes esta molestia?"
+            if is_retry
+            else "¿Recuerdas cuándo empezó?",
         ],
         "sintoma_duracion_horas": [
-            f"¿Cuánto tiempo llevas con {known_symptom or 'este síntoma'}?" if known_symptom 
+            f"¿Cuánto tiempo llevas con {known_symptom or 'este síntoma'}?"
+            if known_symptom
             else "¿Cuánto tiempo ha estado presente?",
-            "¿Podrías decirme si han sido horas, días o más tiempo?" if is_retry 
-            else "¿Ha sido continuo todo este tiempo?"
+            "¿Podrías decirme si han sido horas, días o más tiempo?"
+            if is_retry
+            else "¿Ha sido continuo todo este tiempo?",
         ],
         "sintoma_curso": [
-            f"¿{known_symptom or 'El síntoma'} es constante o va y viene?" if known_symptom 
+            f"¿{known_symptom or 'El síntoma'} es constante o va y viene?"
+            if known_symptom
             else "¿Este problema es constante o intermitente?",
-            "¿Lo sientes todo el tiempo o solo a ratos?" if is_retry 
-            else "¿Cómo se comporta a lo largo del tiempo?"
+            "¿Lo sientes todo el tiempo o solo a ratos?"
+            if is_retry
+            else "¿Cómo se comporta a lo largo del tiempo?",
         ],
         "sintoma_intensidad": [
-            f"En una escala del 0 al 10, ¿qué tan intenso es {known_symptom or 'el síntoma'}?" if known_symptom 
+            f"En una escala del 0 al 10, ¿qué tan intenso es {known_symptom or 'el síntoma'}?"
+            if known_symptom
             else "¿Qué tan fuerte es, del 0 al 10?",
-            "¿Podrías darme un número del 0 al 10 para la intensidad?" if is_retry 
-            else "¿Lo consideras leve, moderado o fuerte?"
+            "¿Podrías darme un número del 0 al 10 para la intensidad?"
+            if is_retry
+            else "¿Lo consideras leve, moderado o fuerte?",
         ],
         "antecedentes_personales": [
-            "¿Tienes algún problema de salud previo o tomas algún medicamento?" if conversation_turns < 5 
+            "¿Tienes algún problema de salud previo o tomas algún medicamento?"
+            if conversation_turns < 5
             else "¿Hay algo en tu historial médico que debería saber?",
-            "¿Algún antecedente médico importante?" if is_retry 
-            else "¿Tomas medicamentos o has tenido problemas de salud antes?"
+            "¿Algún antecedente médico importante?"
+            if is_retry
+            else "¿Tomas medicamentos o has tenido problemas de salud antes?",
         ],
         "antecedentes_familiares": [
             "¿Hay problemas de salud importantes en tu familia cercana?",
-            "¿Algún familiar ha tenido algo similar?" if is_retry 
-            else "¿Tu familia tiene historial de alguna enfermedad relevante?"
+            "¿Algún familiar ha tenido algo similar?"
+            if is_retry
+            else "¿Tu familia tiene historial de alguna enfermedad relevante?",
         ],
         "habitos_riesgo": [
             "¿Tienes algún hábito como fumar, beber alcohol o alguna exposición laboral?",
-            "¿Fumas, bebes o tienes algún hábito que consideres relevante?" if is_retry 
-            else "¿Hay algo en tu estilo de vida que podría estar relacionado?"
+            "¿Fumas, bebes o tienes algún hábito que consideres relevante?"
+            if is_retry
+            else "¿Hay algo en tu estilo de vida que podría estar relacionado?",
         ],
         "sintomas_asociados": [
-            f"¿Has notado otros síntomas además de {known_symptom or 'este'}?" if known_symptom 
+            f"¿Has notado otros síntomas además de {known_symptom or 'este'}?"
+            if known_symptom
             else "¿Tienes algún otro síntoma que acompañe a este problema?",
-            "¿Algo más que hayas notado?" if is_retry 
-            else "¿Hay otros síntomas que vengan junto con esto?"
-        ]
+            "¿Algo más que hayas notado?"
+            if is_retry
+            else "¿Hay otros síntomas que vengan junto con esto?",
+        ],
     }
-    
+
     questions = contextual_questions.get(target, [])
     if questions:
         # Choose first question unless it's a retry, then use second if available
         question_index = 1 if is_retry and len(questions) > 1 else 0
         return questions[question_index]
-    
+
     # Fallback to basic question
     example = config.get("example", "")
     basic_question = f"Para continuar, necesito saber {config['description']}."
     if example and not is_retry:
         basic_question += f" Por ejemplo: {example}."
     basic_question += " ¿Podrías contármelo?"
-    
+
     return basic_question
 
 
@@ -590,7 +647,7 @@ def _get_encouragement_prefix(target: str, lang: str) -> str:
             "sintoma_inicio": "No te preocupes si no recuerdas exactamente.",
             "antecedentes_personales": "Cualquier información que puedas compartir es útil.",
             "antecedentes_familiares": "Solo lo que recuerdes está bien.",
-            "habitos_riesgo": "Comparte solo lo que consideres relevante."
+            "habitos_riesgo": "Comparte solo lo que consideres relevante.",
         }
         return encouragements.get(target, "")
     return ""
@@ -605,17 +662,17 @@ def parse_and_clean_node(state: AgentState) -> AgentState:
 def update_state_node(state: AgentState) -> AgentState:
     data = clone_data(state.get("data", {}))
     internal = data.setdefault("_internal", {})
-    
+
     # Track graph steps for emergency detection
     graph_steps = internal.get("graph_steps", 0) + 1
     internal["graph_steps"] = graph_steps
-    
+
     # Emergency check - if we're in too deep, force classification
     if graph_steps > 22:
         internal["emergency_exit"] = True
         internal["has_sufficiency"] = True
         return {"data": data}
-    
+
     parsed = ensure_parsed(data)
     internal = data.setdefault("_internal", {})
 
@@ -626,12 +683,12 @@ def update_state_node(state: AgentState) -> AgentState:
 
     # Enhanced information tracking
     info_added = _compare_anamnesis(old_anamnesis, new_anamnesis)
-    
+
     # Track field success/failure rates
     awaiting_field = internal.get("awaiting_field")
     if awaiting_field:
         failed_attempts = internal.setdefault("failed_field_attempts", {})
-        
+
         if info_added:
             # Success - field was answered
             internal.pop("awaiting_field", None)
@@ -645,13 +702,15 @@ def update_state_node(state: AgentState) -> AgentState:
             recent_user_response = _get_last_user_response(dict(data))
             if _is_evasive_response(recent_user_response, awaiting_field):
                 # Mark this field as failed
-                failed_attempts[awaiting_field] = failed_attempts.get(awaiting_field, 0) + 1
+                failed_attempts[awaiting_field] = (
+                    failed_attempts.get(awaiting_field, 0) + 1
+                )
                 # If failed too many times, add to failed fields list
                 if failed_attempts[awaiting_field] >= 2:
                     failed_fields = internal.setdefault("failed_fields", [])
                     if awaiting_field not in failed_fields:
                         failed_fields.append(awaiting_field)
-                
+
                 # Clear awaiting field to try something else
                 internal.pop("awaiting_field", None)
                 internal.pop("planner_action", None)
@@ -677,46 +736,61 @@ def _is_evasive_response(response: str, expected_field: str) -> bool:
     """Enhanced check for evasive or non-responsive answers"""
     if not response:
         return True
-    
+
     response_lower = response.lower().strip()
-    
+
     # Direct evasive responses
     evasive_patterns = [
-        "no sé", "no lo sé", "no estoy seguro", "no recuerdo", "no me acuerdo",
-        "no sabría decir", "no tengo idea", "no lo recuerdo", "ya te dije",
-        "ya te conté", "no sé qué más", "no entiendo", "basta", "termina"
+        "no sé",
+        "no lo sé",
+        "no estoy seguro",
+        "no recuerdo",
+        "no me acuerdo",
+        "no sabría decir",
+        "no tengo idea",
+        "no lo recuerdo",
+        "ya te dije",
+        "ya te conté",
+        "no sé qué más",
+        "no entiendo",
+        "basta",
+        "termina",
     ]
-    
+
     if any(pattern in response_lower for pattern in evasive_patterns):
         return True
-    
+
     # Check if response is completely off-topic for the expected field
     if expected_field and len(response.split()) > 2:
         field_config = FIELD_CONFIG.get(expected_field, {})
         field_keywords = field_config.get("keywords", [])
         field_description = field_config.get("description", "").lower()
-        
+
         # If it's a substantial response but doesn't relate to the field at all
         response_has_field_relation = any(
             keyword.lower() in response_lower for keyword in field_keywords
         ) or any(
-            word in response_lower for word in field_description.split() if len(word) > 3
+            word in response_lower
+            for word in field_description.split()
+            if len(word) > 3
         )
-        
+
         if not response_has_field_relation:
             # Check if it's giving information about a different field
             other_field_mentioned = False
             for other_field, other_config in FIELD_CONFIG.items():
                 if other_field != expected_field:
                     other_keywords = other_config.get("keywords", [])
-                    if any(keyword.lower() in response_lower for keyword in other_keywords):
+                    if any(
+                        keyword.lower() in response_lower for keyword in other_keywords
+                    ):
                         other_field_mentioned = True
                         break
-            
+
             # If talking about something completely different, consider evasive
             if not other_field_mentioned:
                 return True
-    
+
     return False
 
 
@@ -752,7 +826,7 @@ def _compare_anamnesis(old: Dict[str, Any], new: Dict[str, Any]) -> bool:
 def sufficiency_gate_node(state: AgentState) -> AgentState:
     data = clone_data(state.get("data", {}))
     internal = data.setdefault("_internal", {})
-    
+
     # Track graph steps
     graph_steps = internal.get("graph_steps", 0) + 1
     internal["graph_steps"] = graph_steps
@@ -761,16 +835,16 @@ def sufficiency_gate_node(state: AgentState) -> AgentState:
     loop_count = internal.get("planner_loop_count", 0)
     conversation_turns = len(data.get("raw_dialog", [])) // 2
     failed_fields_count = len(internal.get("failed_fields", []))
-    
+
     # Immediate forced sufficiency conditions
     emergency_sufficient = (
-        graph_steps > 18 or  # Too many graph steps
-        loop_count > 4 or    # Too many planner loops
-        conversation_turns > 10 or  # Long conversation
-        failed_fields_count > 2 or  # Too many failed fields
-        internal.get("emergency_exit", False)  # Emergency flag set
+        graph_steps > 18  # Too many graph steps
+        or loop_count > 4  # Too many planner loops
+        or conversation_turns > 10  # Long conversation
+        or failed_fields_count > 2  # Too many failed fields
+        or internal.get("emergency_exit", False)  # Emergency flag set
     )
-    
+
     if emergency_sufficient:
         internal["has_sufficiency"] = True
         internal["forced_sufficient"] = True
@@ -778,35 +852,35 @@ def sufficiency_gate_node(state: AgentState) -> AgentState:
             "graph_steps": graph_steps,
             "loop_count": loop_count,
             "conversation_turns": conversation_turns,
-            "failed_fields_count": failed_fields_count
+            "failed_fields_count": failed_fields_count,
         }
         return {"data": data}
-    
+
     # Enhanced sufficiency evaluation with multiple factors
     anamnesis = data.get("anamnesis", default_anamnesis())
     base_sufficiency = has_sufficient_data(anamnesis)
-    
+
     # Adaptive thresholds based on conversation context
     force_sufficient = False
-    
+
     # Factor 1: User seems frustrated or uncooperative
     if _detect_user_frustration(dict(data)):
         force_sufficient = True
-    
+
     # Factor 2: We have minimal viable info even if not "sufficient"
     if not base_sufficiency and _has_minimal_viable_info(anamnesis):
         # Check if we've made reasonable attempts
         if conversation_turns > 4 or failed_fields_count > 0:
             force_sufficient = True
-    
+
     # Factor 3: Quality over quantity - if we have good core info
     if _has_high_quality_core_info(anamnesis):
         force_sufficient = True
-    
+
     # Make final decision
     has_sufficiency = base_sufficiency or force_sufficient
     internal["has_sufficiency"] = has_sufficiency
-    
+
     # Log the decision factors for debugging
     internal["sufficiency_factors"] = {
         "base_sufficiency": base_sufficiency,
@@ -814,9 +888,9 @@ def sufficiency_gate_node(state: AgentState) -> AgentState:
         "conversation_turns": conversation_turns,
         "failed_fields_count": failed_fields_count,
         "forced_sufficient": force_sufficient,
-        "final_decision": has_sufficiency
+        "final_decision": has_sufficiency,
     }
-    
+
     if has_sufficiency:
         internal["planner_loop_count"] = 0
 
@@ -828,61 +902,72 @@ def _detect_user_frustration(data: Dict[str, Any]) -> bool:
     raw_dialog = data.get("raw_dialog", [])
     if len(raw_dialog) < 4:
         return False
-    
+
     # Look at recent user messages for frustration indicators
     recent_user_msgs = [
         turn.get("content", "").lower()
         for turn in raw_dialog[-6:]
         if turn.get("role") == "user"
     ]
-    
+
     frustration_patterns = [
-        "ya te dije", "ya te conté", "no sé qué más", "basta", 
-        "termina", "no entiendo por qué", "ya respondí", 
-        "no quiero más", "esto es muy largo", "cuántas preguntas"
+        "ya te dije",
+        "ya te conté",
+        "no sé qué más",
+        "basta",
+        "termina",
+        "no entiendo por qué",
+        "ya respondí",
+        "no quiero más",
+        "esto es muy largo",
+        "cuántas preguntas",
     ]
-    
+
     frustration_count = sum(
-        1 for msg in recent_user_msgs 
-        for pattern in frustration_patterns 
+        1
+        for msg in recent_user_msgs
+        for pattern in frustration_patterns
         if pattern in msg
     )
-    
+
     return frustration_count >= 1
 
 
 def _has_minimal_viable_info(anamnesis: Dict[str, Any]) -> bool:
     """Check if we have absolute minimum info needed"""
     # Must have complaint
-    has_complaint = bool(anamnesis.get("motivo") or 
-                        anamnesis.get("sintoma_principal", {}).get("nombre"))
-    
+    has_complaint = bool(
+        anamnesis.get("motivo") or anamnesis.get("sintoma_principal", {}).get("nombre")
+    )
+
     if not has_complaint:
         return False
-    
+
     # Must have at least one piece of additional information
     sympt = anamnesis.get("sintoma_principal", {})
-    additional_info_count = sum([
-        bool(sympt.get("inicio")),
-        bool(sympt.get("duracion_horas")),
-        bool(sympt.get("intensidad_0_10")),
-        bool(sympt.get("curso")),
-        bool(anamnesis.get("antecedentes_personales")),
-        bool(anamnesis.get("sintomas_asociados"))
-    ])
-    
+    additional_info_count = sum(
+        [
+            bool(sympt.get("inicio")),
+            bool(sympt.get("duracion_horas")),
+            bool(sympt.get("intensidad_0_10")),
+            bool(sympt.get("curso")),
+            bool(anamnesis.get("antecedentes_personales")),
+            bool(anamnesis.get("sintomas_asociados")),
+        ]
+    )
+
     return additional_info_count >= 1
 
 
 def _has_high_quality_core_info(anamnesis: Dict[str, Any]) -> bool:
     """Check if we have high-quality core information that's sufficient for basic triage"""
     sympt = anamnesis.get("sintoma_principal", {})
-    
+
     # High quality means: clear symptom + temporal info + characterization
     has_clear_symptom = bool(anamnesis.get("motivo") and sympt.get("nombre"))
     has_temporal = bool(sympt.get("inicio") or sympt.get("duracion_horas"))
     has_characterization = bool(sympt.get("intensidad_0_10") or sympt.get("curso"))
-    
+
     return has_clear_symptom and has_temporal and has_characterization
 
 
