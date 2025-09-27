@@ -1,2 +1,0 @@
-# anamnesis-agent
-The agent
